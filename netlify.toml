@@ -1,0 +1,9 @@
+# Netlify deployment config
+[build]
+  publish = "."
+
+# SPA redirects: send all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,0 +1,10 @@
+# Local environment
+.DS_Store
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Netlify
+.netlify/

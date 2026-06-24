@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>骑迹 · 骑行追踪</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:#0f1a12;color:#e0e8e0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',sans-serif;
+  font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+/* ── App ── */
+#app{max-width:520px;margin:0 auto;height:100vh;background:#111d15;display:flex;flex-direction:column;position:relative}
+/* ── Header ── */
+.header{
+  padding:12px 16px 0;background:linear-gradient(180deg,#1a5c3a 0%,#111d15 100%);
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;z-index:10;
+}
+.header .logo{font-size:18px;font-weight:700;letter-spacing:1px;color:#d0e8d0}
+.header .logo span{color:#5aba7a}
+.header .hdr-right{font-size:12px;color:#6a8a6e}
+/* ── Tab Bar ── */
+.tab-bar{
+  display:flex;background:#0f1a12;border-bottom:1px solid #1a2e20;
+  position:relative;z-index:10;flex-shrink:0;
+}
+.tab-btn{
+  flex:1;padding:10px 8px 8px;text-align:center;
+  font-size:12px;color:#5a7a5e;letter-spacing:.5px;
+  cursor:pointer;transition:all .2s;border:none;background:transparent;
+  font-family:inherit;position:relative;
+}
+.tab-btn.active{color:#6ada8a;font-weight:600}
+.tab-btn.active::after{content:'';position:absolute;bottom:0;left:25%;right:25%;height:2px;background:#6ada8a;border-radius:1px}
+.tab-btn .tab-icon{font-size:18px;display:block;margin-bottom:2px}
+.tab-btn.special{color:#4a6a4e}
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;overflow-x:hidden;position:relative}
+/* ── Tracking Screen ── */
+.track-screen{height:100%;display:flex;flex-direction:column;position:relative}
+.track-speed{
+  text-align:center;padding:10px 16px 8px;flex-shrink:0;
+  background:linear-gradient(180deg,rgba(26,92,58,.3) 0%,transparent 100%);
+}
+.track-speed .ts-num{font-size:56px;font-weight:200;letter-spacing:-2px;color:#e0f0e0;line-height:1}
+.track-speed .ts-num span{font-size:18px;font-weight:400;color:#6a8a6e;letter-spacing:1px}
+.track-speed .ts-unit{font-size:12px;color:#5a7a5e;letter-spacing:2px;margin-top:-2px}
+.track-stats{
+  display:flex;justify-content:space-around;padding:6px 16px 10px;flex-shrink:0;
+  text-align:center;
+}
+.track-stats .ts-item{}
+.track-stats .ts-item .ts-val{font-size:20px;font-weight:600;color:#d0e8d0;display:block}
+.track-stats .ts-item .ts-lbl{font-size:11px;color:#5a7a5e}
+.track-map-wrap{flex:1;position:relative;min-height:0;margin:0}
+.track-map-wrap #trackMap{width:100%;height:100%;background:#0a120a}
+.track-map-wrap .track-status-overlay{
+  position:absolute;top:12px;left:12px;right:12px;z-index:1000;
+  display:flex;justify-content:space-between;pointer-events:none;
+}
+.track-map-wrap .track-status-overlay .gps-badge{
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  padding:4px 10px;border-radius:20px;font-size:11px;color:#8aaa8e;
+  pointer-events:auto;
+}
+.track-map-wrap .track-status-overlay .gps-badge.good{color:#6ada8a}
+.track-map-wrap .track-status-overlay .gps-badge.poor{color:#da8a4a}
+.track-map-wrap .track-status-overlay .gps-badge .dot{
+  display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;
+  vertical-align:middle;
+}
+.track-map-wrap .track-status-overlay .gps-badge.good .dot{background:#6ada8a}
+.track-map-wrap .track-status-overlay .gps-badge.poor .dot{background:#da8a4a}
+.track-controls{
+  padding:16px 20px 24px;flex-shrink:0;
+  display:flex;justify-content:center;gap:16px;
+  background:linear-gradient(0deg,#0f1a12 60%,transparent 100%);
+}
+.track-controls .ctrl-btn{
+  width:56px;height:56px;border-radius:50%;border:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:22px;transition:all .2s;font-family:inherit;
+}
+.track-controls .ctrl-btn:active{transform:scale(.92)}
+.track-controls .ctrl-start{
+  width:64px;height:64px;background:#2d8a5e;color:#fff;
+  box-shadow:0 4px 16px rgba(45,138,94,.4);
+}
+.track-controls .ctrl-start:hover{background:#3aaa6e;transform:scale(1.04)}
+.track-controls .ctrl-stop{background:#6a2a2a;color:#e08080}
+.track-controls .ctrl-stop:hover{background:#8a3a3a}
+.track-controls .ctrl-pause{background:#3a4a3a;color:#8aaa8e}
+.track-controls .ctrl-pause:hover{background:#4a5a4a;color:#aacaaa}
+.track-controls .ctrl-resume{background:#2d5a4a;color:#8adaaa}
+.track-controls .ctrl-resume:hover{background:#3a7a5a}
+.track-idle{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;padding:40px;text-align:center;
+}
+.track-idle .idle-icon{font-size:48px;margin-bottom:12px;opacity:.6}
+.track-idle .idle-title{font-size:22px;font-weight:600;color:#d0e8d0;margin-bottom:6px}
+.track-idle .idle-sub{font-size:14px;color:#5a7a5e;margin-bottom:24px;line-height:1.7}
+.track-idle .idle-btn{
+  padding:16px 48px;border-radius:30px;border:none;
+  background:#2d8a5e;color:#fff;font-size:18px;font-weight:600;
+  cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 20px rgba(45,138,94,.35);
+  transition:all .2s;letter-spacing:2px;
+}
+.track-idle .idle-btn:hover{background:#3aaa6e;transform:translateY(-2px)}
+.track-idle .idle-btn:active{transform:scale(.97)}
+.track-idle .last-ride-info{
+  margin-top:24px;padding:12px 16px;background:rgba(255,255,255,.03);
+  border-radius:12px;font-size:13px;color:#6a8a6e;
+}
+.track-idle .last-ride-info .lri-num{color:#8abaaa;font-weight:600}
+/* ── History Calendar ── */
+.cal-screen{padding:16px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-header .cal-title{font-size:17px;font-weight:600;color:#d0e8d0}
+.cal-nav{display:flex;gap:8px}
+.cal-nav button{
+  width:34px;height:34px;border-radius:50%;border:1px solid #2a3e2e;
+  background:#0f1a12;cursor:pointer;font-size:16px;color:#6a8a6e;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit;
+}
+.cal-nav button:hover{background:#1a2e20;border-color:#3a5e3e}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-grid .cal-weekday{text-align:center;font-size:11px;color:#4a6a4e;padding:4px 0;font-weight:500}
+.cal-grid .cal-day{
+  text-align:center;padding:6px 0;font-size:14px;color:#c0d8c0;
+  cursor:pointer;border-radius:8px;transition:all .15s;position:relative;
+  min-height:36px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.cal-grid .cal-day:hover{background:#1a2e20}
+.cal-grid .cal-day.other-month{color:#2a3e2e}
+.cal-grid .cal-day.today{font-weight:700;color:#6ada8a}
+.cal-grid .cal-day.selected{background:#1a5c3a;color:#fff;font-weight:600}
+.cal-grid .cal-day .dot{width:4px;height:4px;border-radius:50%;background:#5aba7a;margin-top:2px}
+.cal-grid .cal-day.selected .dot{background:#8ad4a8}
+.day-rides{margin-top:12px}
+.day-rides .dr-title{font-size:13px;color:#6a8a6e;margin-bottom:8px;font-weight:500}
+.ride-card{
+  background:#162018;border-radius:12px;padding:12px 14px;
+  margin-bottom:8px;display:flex;align-items:center;gap:12px;
+  cursor:default;border:1px solid #1a2e20;
+}
+.ride-card .rc-dist{font-size:20px;font-weight:700;color:#5aba7a;min-width:54px;letter-spacing:-.5px}
+.ride-card .rc-dist span{font-size:11px;font-weight:400;color:#5a7a5e}
+.ride-card .rc-info{flex:1;min-width:0}
+.ride-card .rc-name{font-size:14px;font-weight:500;color:#c0d8c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ride-card .rc-meta{font-size:11px;color:#5a7a5e;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+.ride-card .rc-del{
+  width:28px;height:28px;border:none;background:transparent;
+  cursor:pointer;border-radius:50%;font-size:14px;color:#4a5a4e;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;
+}
+.ride-card .rc-del:hover{background:#2a1a1a;color:#c06060}
+.no-rides{text-align:center;padding:20px;color:#3a5a3e;font-size:14px}
+.dm-btn{padding:8px 16px;border:1px solid #2a3e2e;border-radius:8px;background:#0f1a12;color:#8aaa8e;cursor:pointer;font-family:inherit;font-size:13px;transition:all .15s;white-space:nowrap}
+.dm-btn:hover{background:#1a2e20;border-color:#3a7a3e;color:#6ada8a}
+/* ── Rides List Tab ── */
+.rides-screen{padding:16px}
+.rides-screen .rides-filter{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.rides-screen .rides-filter select,.rides-screen .rides-filter input{
+  padding:8px 12px;border:1px solid #2a3e2e;border-radius:8px;
+  font-family:inherit;font-size:13px;background:#0f1a12;color:#c0d8c0;
+}
+.rides-screen .rides-filter select{flex:1}
+.rides-screen .rides-filter input{flex:2;min-width:100px}
+.total-bar{
+  display:flex;gap:16px;padding:10px 14px;background:#162018;
+  border-radius:10px;margin-bottom:12px;font-size:12px;color:#5a7a5e;
+  justify-content:space-around;text-align:center;border:1px solid #1a2e20;
+}
+.total-bar .tb-num{font-weight:700;color:#6ada8a;font-size:16px;display:block}
+/* ── Stats Tab ── */
+.stats-screen{padding:16px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.stats-card{
+  background:#162018;border-radius:12px;padding:14px;text-align:center;
+  border:1px solid #1a2e20;
+}
+.stats-card .sc-num{font-size:26px;font-weight:700;color:#5aba7a;display:block}
+.stats-card .sc-label{font-size:11px;color:#5a7a5e;margin-top:3px}
+.stats-card.full{grid-column:1/-1;display:flex;justify-content:space-around}
+.stats-card .sc-num.muted{color:#8aaa8e}
+.stats-section{margin-bottom:16px}
+.stats-section .ss-title{font-size:12px;font-weight:600;color:#6a8a6e;margin-bottom:8px;letter-spacing:.5px}
+.ride-bar-item{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px}
+.ride-bar-item .rbi-date{color:#5a7a5e;min-width:58px;flex-shrink:0}
+.ride-bar-item .rbi-bar-wrap{flex:1;height:6px;background:#1a2e20;border-radius:3px;overflow:hidden}
+.ride-bar-item .rbi-bar-fill{height:100%;background:#2d8a5e;border-radius:3px;transition:width .6s}
+.ride-bar-item .rbi-dist{color:#8aaa8e;min-width:36px;text-align:right;font-weight:500;flex-shrink:0}
+.empty-state{text-align:center;padding:48px 20px;color:#3a5a3e}
+.empty-state .empty-icon{font-size:42px;margin-bottom:10px;opacity:.4}
+.empty-state .empty-text{font-size:15px;color:#5a7a5e}
+/* ── Modal ── */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:30;padding:0;
+  animation:fadeIn .2s ease;
+}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+.modal{
+  background:#162018;border-radius:20px 20px 0 0;width:100%;max-width:520px;
+  padding:24px 20px 32px;
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{0%{transform:translateY(30px)}100%{transform:translateY(0)}}
+.modal-title{font-size:17px;font-weight:600;color:#d0e8d0;margin-bottom:18px;text-align:center}
+.modal .form-group{margin-bottom:12px}
+.modal .form-group label{display:block;font-size:11px;color:#6a8a6e;margin-bottom:3px;font-weight:500;letter-spacing:.5px}
+.modal .form-group input,.modal .form-group textarea{
+  width:100%;padding:10px 12px;border:1px solid #2a3e2e;border-radius:8px;
+  font-family:inherit;font-size:15px;color:#d0e8d0;background:#0f1a12;
+  transition:border .15s;
+}
+.modal .form-group input:focus,.modal .form-group textarea:focus{
+  outline:none;border-color:#3a8a5e;box-shadow:0 0 0 2px rgba(58,138,94,.15);
+}
+.modal .form-group textarea{resize:vertical;min-height:50px}
+.modal .form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal .form-row.three{grid-template-columns:1fr 1fr 1fr}
+.modal .form-actions{display:flex;gap:10px;margin-top:16px}
+.modal .form-actions button{
+  flex:1;padding:12px;border-radius:10px;border:none;
+  font-family:inherit;font-size:15px;cursor:pointer;font-weight:500;transition:all .15s;
+}
+.modal .form-actions .btn-cancel{background:#1a2e20;color:#6a8a6e}
+.modal .form-actions .btn-cancel:hover{background:#2a3e2e}
+.modal .form-actions .btn-save{background:#2d8a5e;color:#fff}
+.modal .form-actions .btn-save:hover{background:#3aaa6e}
+.modal .form-actions .btn-save:disabled{opacity:.4;cursor:not-allowed}
+/* ── Ride Detail Overlay ── */
+.detail-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:30;
+  display:flex;flex-direction:column;padding:0;
+  animation:fadeIn .2s ease;
+}
+.detail-overlay .detail-header{
+  display:flex;align-items:center;padding:16px;gap:12px;
+  background:#111d15;
+}
+.detail-overlay .detail-header .dh-back{
+  width:36px;height:36px;border:none;border-radius:50%;
+  background:#1a2e20;color:#8aaa8e;font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-family:inherit;
+}
+.detail-overlay .detail-header .dh-title{font-size:16px;font-weight:600;color:#d0e8d0;flex:1}
+.detail-overlay .detail-map{flex:1;min-height:0}
+.detail-overlay .detail-map #detailMap{width:100%;height:100%;background:#0a120a}
+.detail-overlay .detail-stats{
+  display:flex;justify-content:space-around;padding:14px 16px;
+  background:#111d15;gap:8px;
+}
+.detail-overlay .detail-stats .ds-item{text-align:center}
+.detail-overlay .detail-stats .ds-val{font-size:18px;font-weight:600;color:#d0e8d0;display:block}
+.detail-overlay .detail-stats .ds-lbl{font-size:11px;color:#5a7a5e}
+.detail-overlay .detail-close{
+  padding:12px 20px;border:none;background:#1a2e20;color:#6a8a6e;
+  font-family:inherit;font-size:15px;cursor:pointer;letter-spacing:1px;
+}
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+  background:#1a2e20;color:#c0d8c0;padding:10px 24px;border-radius:12px;
+  font-size:14px;z-index:40;animation:toastIn .3s ease;
+  white-space:nowrap;pointer-events:none;border:1px solid #2a3e2e;
+}
+@keyframes toastIn{0%{opacity:0;transform:translateX(-50%) translateY(10px)}100%{opacity:1;transform:translateX(-50%) translateY(0)}}
+/* ── Scrollbar ── */
+.content::-webkit-scrollbar{width:3px}
+.content::-webkit-scrollbar-track{background:transparent}
+.content::-webkit-scrollbar-thumb{background:#2a3e2e;border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="header">
+    <div class="logo">🚴<span>骑迹</span></div>
+    <div class="hdr-right" id="hdrRight">骑行日记</div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="track"><span class="tab-icon">⚡</span>骑行</button>
+    <button class="tab-btn" data-tab="calendar"><span class="tab-icon">📅</span>日历</button>
+    <button class="tab-btn" data-tab="stats"><span class="tab-icon">📊</span>统计</button>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+
+<div id="modal" style="display:none"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Utilities ──
+const STORAGE_KEY = 'cycle_tracker_rides';
+const EARTH_R = 6371000;
+function toRad(d){return d*Math.PI/180}
+function haversineDist(lat1,lng1,lat2,lng2){
+  const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return 2*EARTH_R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+function fmtDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function fmtTime(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function fmtDuration(sec){
+  if(!sec||sec<=0)return '--';
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=Math.floor(sec%60);
+  if(h>0)return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function fmtKm(km){return km.toFixed(1)}
+function escHtml(s){if(!s)return '';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// ── State ──
+let state = {
+  rides: [],
+  tab: 'track',
+  currentMonth: new Date(),
+  selectedDate: fmtDate(new Date()),
+  filterMonth: 'all',
+  filterText: '',
+  // Tracking
+  tracking: false,
+  paused: false,
+  watchId: null,
+  trackStart: null,
+  trackPauseStart: null,
+  totalPausedSec: 0,
+  points: [], // [{lat,lng,alt,speed,time}]
+  trackDist: 0,
+  trackMap: null,
+  trackPolyline: null,
+  trackMarker: null,
+  hasGps: false,
+};
+
+// ── Data ──
+function loadData(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);state.rides=raw?JSON.parse(raw):[]}catch(e){state.rides=[]}
+}
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state.rides))}
+
+// ── Ride Helpers ──
+function ridesOnDate(d){return state.rides.filter(r=>r.date===d).sort((a,b)=>b.id.localeCompare(a.id))}
+function ridesInMonth(y,m){const p=`${y}-${String(m+1).padStart(2,'0')}`;return state.rides.filter(r=>r.date.startsWith(p))}
+function totalKm(rs){return rs.reduce((s,r)=>s+(r.distance||0),0)}
+function totalTime(rs){return rs.reduce((s,r)=>s+(r.duration||0),0)}
+
+// ── Render ──
+function render(){
+  const c=document.getElementById('content');
+  if(state.tab==='track')c.innerHTML=renderTrack();
+  else if(state.tab==='calendar')c.innerHTML=renderCalendar();
+  else if(state.tab==='stats')c.innerHTML=renderStats();
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));
+  initTrackMap();
+}
+
+// ── TRACKING SCREEN ──
+function renderTrack(){
+  const last=state.rides.length>0?state.rides.reduce((a,b)=>a.date>b.date||(a.date===b.date&&a.id>b.id)?a:b):null;
+  if(!state.tracking){
+    let lastHtml='';
+    if(last){
+      const d=parseFloat(last.distance).toFixed(1);
+      lastHtml=`<div class="last-ride-info">上次骑行 · <span class="lri-num">${d} km</span> · ${last.date} · ${last.name||''}</div>`;
+    }
+    return `<div class="track-screen">
+      <div class="track-idle">
+        <div class="idle-icon">🚴</div>
+        <div class="idle-title">准备出发</div>
+        <div class="idle-sub">GPS 将记录你的路线、速度<br>和骑行距离</div>
+        <button class="idle-btn" onclick="startTracking()">开始骑行</button>
+        ${lastHtml}
+      </div>
+    </div>`;
+  }
+  const speed=state.points.length>0?state.points[state.points.length-1].speed:0;
+  const dur=state.trackStart?Math.floor((Date.now()-state.trackStart-state.totalPausedSec)/1000):0;
+  const avg=state.trackDist>0&&dur>0?state.trackDist/(dur/3600):0;
+  return `<div class="track-screen">
+    <div class="track-speed">
+      <div class="ts-num">${speed.toFixed(1)}<span> km/h</span></div>
+      <div class="ts-unit">当前速度</div>
+    </div>
+    <div class="track-stats">
+      <div class="ts-item"><span class="ts-val">${fmtKm(state.trackDist)}</span><span class="ts-lbl">距离 km</span></div>
+      <div class="ts-item"><span class="ts-val">${fmtDuration(dur)}</span><span class="ts-lbl">时长</span></div>
+      <div class="ts-item"><span class="ts-val">${avg>0?avg.toFixed(1):'--'}</span><span class="ts-lbl">均速 km/h</span></div>
+    </div>
+    <div class="track-map-wrap">
+      <div id="trackMap"></div>
+      <div class="track-status-overlay">
+        <div class="gps-badge ${state.hasGps?'good':'poor'}"><span class="dot"></span>${state.hasGps?'GPS 正常':'GPS 定位中...'}</div>
+        <div class="gps-badge">${state.paused?'已暂停 · ':'追踪中 · '}${state.points.length} pts</div>
+      </div>
+    </div>
+    <div class="track-controls">
+      ${state.paused
+        ? `<button class="ctrl-btn ctrl-resume" onclick="resumeTracking()">▶</button>
+           <button class="ctrl-btn ctrl-stop" onclick="stopTracking()">⏹</button>`
+        : `<button class="ctrl-btn ctrl-pause" onclick="pauseTracking()">⏸</button>
+           <button class="ctrl-btn ctrl-stop" onclick="stopTracking()">⏹</button>`
+      }
+    </div>
+    <div class="stats-section"><div class="ss-title">数据管理</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="exportData()" class="dm-btn">📤 导出 JSON</button>
+        <button onclick="document.getElementById('importInput').click()" class="dm-btn">📥 导入 JSON</button>
+        <input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+      <div style="font-size:11px;color:#3a5a3e;margin-top:8px">数据存储在浏览器本地 (localStorage)，导出可备份迁移</div>
+    </div>
+  </div>`;
+}
+
+// ── TRACKING LOGIC ──
+function startTracking(){
+  state.tracking=true;state.paused=false;state.points=[];
+  state.trackStart=Date.now();state.totalPausedSec=0;
+  state.trackDist=0;state.hasGps=false;
+  render();
+  if(!navigator.geolocation){showToast('设备不支持 GPS');return}
+  state.watchId=navigator.geolocation.watchPosition(pos=>{
+    const{latitude,longitude,altitude,speed,accuracy}=pos.coords;
+    const spd=speed!==null&&speed!==undefined?speed*3.6:0; // m/s to km/h
+    state.hasGps=true;
+    const now=Date.now();
+    const pt={lat:latitude,lng:longitude,alt:altitude,speed:spd,time:now};
+    if(state.points.length>0){
+      const last=state.points[state.points.length-1];
+      if(haversineDist(last.lat,last.lng,pt.lat,pt.lng)>3){ // >3m
+        state.trackDist+=haversineDist(last.lat,last.lng,pt.lat,pt.lng)/1000;
+        state.points.push(pt);
+      }
+    }else{
+      state.points.push(pt);
+    }
+    updateTrackUI();
+  },err=>{
+    state.hasGps=false;showToast('GPS 信号弱');
+  },{enableHighAccuracy:true,timeout:8000,maximumAge:3000});
+}
+
+function pauseTracking(){
+  state.paused=true;state.trackPauseStart=Date.now();
+  if(state.watchId!==null){navigator.geolocation.clearWatch(state.watchId);state.watchId=null}
+  render();
+}
+function resumeTracking(){
+  if(state.trackPauseStart)state.totalPausedSec+=(Date.now()-state.trackPauseStart)/1000;
+  state.paused=false;
+  state.watchId=navigator.geolocation.watchPosition(pos=>{
+    const{latitude,longitude,altitude,speed}=pos.coords;
+    const spd=speed!==null&&speed!==undefined?speed*3.6:0;
+    state.hasGps=true;
+    const now=Date.now();
+    const pt={lat:latitude,lng:longitude,alt:altitude,speed:spd,time:now};
+    if(state.points.length>0){
+      const last=state.points[state.points.length-1];
+      if(haversineDist(last.lat,last.lng,pt.lat,pt.lng)>3){
+        state.trackDist+=haversineDist(last.lat,last.lng,pt.lat,pt.lng)/1000;
+        state.points.push(pt);
+      }
+    }else{state.points.push(pt)}
+    updateTrackUI();
+  },()=>{state.hasGps=false},{enableHighAccuracy:true,timeout:8000,maximumAge:3000});
+  render();
+}
+
+function stopTracking(){
+  if(state.watchId!==null){navigator.geolocation.clearWatch(state.watchId);state.watchId=null}
+  const dur=state.trackStart?Math.floor((Date.now()-state.trackStart-state.totalPausedSec)/1000):0;
+  if(state.points.length<2){
+    state.tracking=false;state.paused=false;state.points=[];state.trackDist=0;
+    showToast('数据太少，未保存');render();return;
+  }
+  const maxSpd=state.points.reduce((m,p)=>Math.max(m,p.speed),0);
+  const avgSpd=state.trackDist>0&&dur>0?state.trackDist/(dur/3600):0;
+  // Show save dialog
+  const d=new Date();
+  document.getElementById('modal').style.display='';
+  document.getElementById('modal').innerHTML=`
+    <div class="modal-overlay" onclick="document.getElementById('modal').style.display='none';cancelStop()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-title">🚴 骑行完成！</div>
+        <div class="stats-grid" style="margin-bottom:12px">
+          <div class="stats-card"><span class="sc-num">${fmtKm(state.trackDist)}</span><span class="sc-label">距离 km</span></div>
+          <div class="stats-card"><span class="sc-num">${fmtDuration(dur)}</span><span class="sc-label">时长</span></div>
+          <div class="stats-card"><span class="sc-num">${avgSpd>0?avgSpd.toFixed(1):'--'}</span><span class="sc-label">均速 km/h</span></div>
+          <div class="stats-card"><span class="sc-num">${maxSpd.toFixed(1)}</span><span class="sc-label">最高 km/h</span></div>
+        </div>
+        <div class="form-group"><label>日期</label><input type="date" id="fDate" value="${fmtDate(d)}"></div>
+        <div class="form-group"><label>路线名称</label><input type="text" id="fName" placeholder="如 滨江绿道"></div>
+        <div class="form-group"><label>备注（天气、心情...）</label><textarea id="fNotes" placeholder=""></textarea></div>
+        <div class="form-actions">
+          <button class="btn-cancel" onclick="document.getElementById('modal').innerHTML='';document.getElementById('modal').style.display='none';cancelStop()">放弃</button>
+          <button class="btn-save" onclick="saveTrackedRide()">保存记录</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function cancelStop(){
+  state.tracking=false;state.paused=false;state.points=[];state.trackDist=0;
+  state.trackStart=null;state.totalPausedSec=0;
+  if(state.trackMap){state.trackMap.remove();state.trackMap=null}
+  render();
+}
+
+function saveTrackedRide(){
+  const date=document.getElementById('fDate').value;
+  const name=document.getElementById('fName').value.trim();
+  const notes=document.getElementById('fNotes').value.trim();
+  if(!date){showToast('请选择日期');return}
+  const dur=state.trackStart?Math.floor((Date.now()-state.trackStart-state.totalPausedSec)/1000):0;
+  const maxSpd=state.points.reduce((m,p)=>Math.max(m,p.speed),0);
+  const avgSpd=state.trackDist>0&&dur>0?state.trackDist/(dur/3600):0;
+  state.rides.push({
+    id:genId(),date,distance:state.trackDist,duration:dur,
+    avgSpeed:avgSpd,maxSpeed:maxSpd,
+    name,notes,
+    points:state.points.map(p=>({lat:Number(p.lat.toFixed(6)),lng:Number(p.lng.toFixed(6)),speed:p.speed,time:p.time})),
+    createdAt:new Date().toISOString()
+  });
+  saveData();
+  document.getElementById('modal').innerHTML='';document.getElementById('modal').style.display='none';
+  state.tracking=false;state.paused=false;state.points=[];state.trackDist=0;
+  state.trackStart=null;state.totalPausedSec=0;
+  if(state.trackMap){state.trackMap.remove();state.trackMap=null}
+  render();
+  showToast('🚴 保存成功！');
+}
+
+function updateTrackUI(){
+  if(!state.tracking)return;
+  const c=document.getElementById('content');
+  if(!c||!c.querySelector('.track-screen')){render();return}
+  // Update speed
+  const last=state.points[state.points.length-1];
+  if(last){
+    const el=c.querySelector('.ts-num');
+    if(el)el.innerHTML=last.speed.toFixed(1)+'<span> km/h</span>';
+  }
+  // Update stats
+  const dur=state.trackStart?Math.floor((Date.now()-state.trackStart-state.totalPausedSec)/1000):0;
+  const avg=state.trackDist>0&&dur>0?state.trackDist/(dur/3600):0;
+  const vals=c.querySelectorAll('.ts-val');
+  if(vals.length>=3){
+    vals[0].textContent=fmtKm(state.trackDist);
+    vals[1].textContent=fmtDuration(dur);
+    vals[2].textContent=avg>0?avg.toFixed(1):'--';
+  }
+  // Update GPS status
+  const badge=c.querySelector('.gps-badge');
+  if(badge){
+    badge.className='gps-badge '+(state.hasGps?'good':'poor');
+    badge.innerHTML=`<span class="dot"></span>${state.hasGps?'GPS 正常':'GPS 定位中...'}`;
+  }
+  const badge2=c.querySelector('.gps-badge:last-child');
+  if(badge2)badge2.textContent=`${state.paused?'已暂停 · ':'追踪中 · '}${state.points.length} pts`;
+  // Update map
+  updateTrackMap();
+}
+
+// ── Track Map ──
+function initTrackMap(){
+  if(!state.tracking||state.trackMap)return;
+  const el=document.getElementById('trackMap');
+  if(!el)return;
+  // Wait for element to be in DOM
+  requestAnimationFrame(()=>{
+    state.trackMap=L.map('trackMap',{zoomControl:false,attributionControl:false}).setView([30.5,114.3],13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:18
+    }).addTo(state.trackMap);
+    state.trackPolyline=L.polyline([],{color:'#5aba7a',weight:3,opacity:.8}).addTo(state.trackMap);
+    state.trackMarker=L.circleMarker([30.5,114.3],{radius:5,color:'#6ada8a',fillColor:'#6ada8a',fillOpacity:1}).addTo(state.trackMap);
+    if(state.points.length>0){
+      const pts=state.points.map(p=>[p.lat,p.lng]);
+      state.trackPolyline.setLatLngs(pts);
+      state.trackMarker.setLatLng([state.points[state.points.length-1].lat,state.points[state.points.length-1].lng]);
+      state.trackMap.fitBounds(state.trackPolyline.getBounds().pad(0.1));
+    }
+  });
+}
+
+function updateTrackMap(){
+  if(!state.trackMap||!state.trackPolyline||!state.trackMarker)return;
+  const pts=state.points.map(p=>[p.lat,p.lng]);
+  if(pts.length===0)return;
+  state.trackPolyline.setLatLngs(pts);
+  const last=pts[pts.length-1];
+  state.trackMarker.setLatLng(last);
+  if(pts.length===1)state.trackMap.setView(last,14);
+  else state.trackMap.fitBounds(state.trackPolyline.getBounds().pad(0.1),{maxZoom:16});
+}
+
+// ── CALENDAR SCREEN ──
+function renderCalendar(){
+  const y=state.currentMonth.getFullYear(),m=state.currentMonth.getMonth();
+  const today=fmtDate(new Date());
+  const mRides=ridesInMonth(y,m);
+  const rideDates=new Set(mRides.map(r=>r.date));
+  const firstDay=new Date(y,m,1).getDay();
+  const lastDate=new Date(y,m+1,0).getDate();
+  const prevLast=new Date(y,m,0).getDate();
+  const monthNames=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+
+  let grid='';['日','一','二','三','四','五','六'].forEach(w=>{grid+=`<div class="cal-weekday">${w}</div>`});
+  for(let i=firstDay-1;i>=0;i--)grid+=`<div class="cal-day other-month">${prevLast-i}</div>`;
+  for(let d=1;d<=lastDate;d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const iT=ds===today,iS=ds===state.selectedDate,hR=rideDates.has(ds);
+    grid+=`<div class="cal-day${iT?' today':''}${iS?' selected':''}" data-date="${ds}">${d}${hR?'<div class="dot"></div>':''}</div>`;
+  }
+  const rem=(7-(firstDay+lastDate)%7)%7;
+  for(let i=1;i<=rem;i++)grid+=`<div class="cal-day other-month">${i}</div>`;
+
+  const sRides=ridesOnDate(state.selectedDate);
+  let rHtml='';
+  if(sRides.length>0){
+    rHtml=`<div class="day-rides"><div class="dr-title">${state.selectedDate} · ${sRides.length} 次骑行</div>`;
+    sRides.forEach(r=>{
+      rHtml+=`<div class="ride-card" onclick="showRideDetail('${r.id}')">
+        <div class="rc-dist">${fmtKm(r.distance)}<span> km</span></div>
+        <div class="rc-info">
+          <div class="rc-name">${escHtml(r.name||'未命名路线')}</div>
+          <div class="rc-meta">
+            <span>⏱ ${fmtDuration(r.duration)}</span>
+            ${r.avgSpeed?`<span>⚡ ${r.avgSpeed.toFixed(1)} km/h</span>`:''}
+            ${r.notes?`<span>💬 ${escHtml(r.notes)}</span>`:''}
+          </div>
+        </div>
+        <button class="rc-del" onclick="event.stopPropagation();deleteRide('${r.id}')">✕</button>
+      </div>`;
+    });
+    rHtml+='</div>';
+  }else{rHtml=`<div class="no-rides">这一天还没有骑行记录</div>`;}
+
+  return `<div class="cal-screen">
+    <div class="cal-header">
+      <div class="cal-title">${y}年 ${monthNames[m]}</div>
+      <div class="cal-nav">
+        <button onclick="state.currentMonth=new Date(${y},${m}-1,1);render()">‹</button>
+        <button onclick="state.currentMonth=new Date(${y},${m}+1,1);render()">›</button>
+      </div>
+    </div>
+    <div class="cal-grid">${grid}</div>
+    ${rHtml}
+  </div>`;
+}
+
+// ── STATS SCREEN ──
+function renderStats(){
+  const all=state.rides;
+  const tDist=totalKm(all),tCount=all.length,tDur=totalTime(all);
+  const avgDist=tCount>0?tDist/tCount:0;
+  const maxRide=all.reduce((a,b)=>(a.distance||0)>(b.distance||0)?a:b,all[0]||null);
+  const now=new Date();
+  const monthData=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const rs=all.filter(r=>r.date.startsWith(key));
+    monthData.push({key,label:`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}`,km:totalKm(rs),cnt:rs.length});
+  }
+  const maxMk=Math.max(...monthData.map(m=>m.km),1);
+  const recent=[...all].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,10);
+  const recentMax=Math.max(...recent.map(r=>r.distance||0),1);
+
+  return `<div class="stats-screen">
+    <div class="stats-section"><div class="ss-title">总览</div>
+      <div class="stats-grid">
+        <div class="stats-card"><span class="sc-num">${fmtKm(tDist)}</span><span class="sc-label">总里程 km</span></div>
+        <div class="stats-card"><span class="sc-num">${tCount}</span><span class="sc-label">总次数</span></div>
+        <div class="stats-card"><span class="sc-num">${fmtKm(avgDist)}</span><span class="sc-label">平均距离 km</span></div>
+        <div class="stats-card"><span class="sc-num">${fmtDuration(Math.round(tDur/Math.max(tCount,1)))}</span><span class="sc-label">平均时长</span></div>
+        ${maxRide?`<div class="stats-card full"><div><span class="sc-num">${fmtKm(maxRide.distance)}</span><span class="sc-label">最远单次</span></div>
+        <div><span class="sc-num muted" style="font-size:14px">${escHtml(maxRide.name||'未命名')}</span><span class="sc-label">${maxRide.date}</span></div></div>`:''}
+      </div>
+    </div>
+    <div class="stats-section"><div class="ss-title">近半年月里程</div>
+      ${monthData.map(m=>`<div class="ride-bar-item"><span class="rbi-date">${m.label}</span>
+        <div class="rbi-bar-wrap"><div class="rbi-bar-fill" style="width:${(m.km/maxMk*100).toFixed(1)}%"></div></div>
+        <span class="rbi-dist">${fmtKm(m.km)}</span></div>`).join('')}
+    </div>
+    <div class="stats-section"><div class="ss-title">最近 10 次</div>
+      ${recent.map(r=>`<div class="ride-bar-item"><span class="rbi-date">${r.date.slice(5)}</span>
+        <div class="rbi-bar-wrap"><div class="rbi-bar-fill" style="width:${((r.distance||0)/recentMax*100).toFixed(1)}%"></div></div>
+        <span class="rbi-dist">${fmtKm(r.distance||0)}</span></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ── RIDE DETAIL ──
+function showRideDetail(id){
+  const r=state.rides.find(x=>x.id===id);
+  if(!r)return;
+  const pts=r.points;
+  document.getElementById('modal').style.display='';
+  document.getElementById('modal').innerHTML=`
+    <div class="detail-overlay" onclick="closeDetail(event)">
+      <div class="detail-header" onclick="event.stopPropagation()">
+        <button class="dh-back" onclick="closeDetail()">‹</button>
+        <div class="dh-title">${escHtml(r.name||'骑行详情')}</div>
+      </div>
+      <div class="detail-map" onclick="event.stopPropagation()"><div id="detailMap"></div></div>
+      <div class="detail-stats" onclick="event.stopPropagation()">
+        <div class="ds-item"><span class="ds-val">${fmtKm(r.distance)}</span><span class="ds-lbl">km</span></div>
+        <div class="ds-item"><span class="ds-val">${fmtDuration(r.duration)}</span><span class="ds-lbl">时长</span></div>
+        ${r.avgSpeed?`<div class="ds-item"><span class="ds-val">${r.avgSpeed.toFixed(1)}</span><span class="ds-lbl">均速</span></div>`:''}
+        ${r.maxSpeed?`<div class="ds-item"><span class="ds-val">${r.maxSpeed.toFixed(1)}</span><span class="ds-lbl">最高</span></div>`:''}
+      </div>
+      <button class="detail-close" onclick="closeDetail()">关闭</button>
+    </div>`;
+
+  setTimeout(()=>{
+    const el=document.getElementById('detailMap');
+    if(!el)return;
+    const map=L.map('detailMap',{zoomControl:false,attributionControl:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
+    if(pts&&pts.length>0){
+      const ll=pts.map(p=>[p.lat,p.lng]);
+      L.polyline(ll,{color:'#5aba7a',weight:3}).addTo(map);
+      L.circleMarker(ll[0],{radius:5,color:'#6ada8a',fillColor:'#6ada8a',fillOpacity:1}).addTo(map).bindTooltip('起点');
+      L.circleMarker(ll[ll.length-1],{radius:5,color:'#da8a4a',fillColor:'#da8a4a',fillOpacity:1}).addTo(map).bindTooltip('终点');
+      map.fitBounds(L.latLngBounds(ll).pad(0.1));
+    }else{
+      map.setView([30.5,114.3],13);
+    }
+    setTimeout(()=>map.invalidateSize(),200);
+  },100);
+}
+
+function closeDetail(e){if(e&&!e.target.closest('.detail-overlay'))return;document.getElementById('modal').innerHTML='';document.getElementById('modal').style.display='none'}
+
+// ── ACTIONS ──
+document.getElementById('content').addEventListener('click',e=>{
+  const day=e.target.closest('.cal-day');
+  if(day&&day.dataset.date){state.selectedDate=day.dataset.date;render()}
+});
+document.querySelectorAll('.tab-btn').forEach(b=>{
+  b.addEventListener('click',()=>{state.tab=b.dataset.tab;render()});
+});
+
+function deleteRide(id){
+  if(!confirm('删除这条记录？'))return;
+  state.rides=state.rides.filter(r=>r.id!==id);
+  saveData();render();showToast('已删除');
+}
+
+let toastTimer=null;
+function showToast(msg){
+  const ex=document.querySelector('.toast');if(ex)ex.remove();
+  const el=document.createElement('div');el.className='toast';el.textContent=msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{if(el.parentNode)el.remove()},2200);
+}
+
+
+function exportData(){
+  var data = JSON.stringify(state.rides, null, 2);
+  var blob = new Blob([data], {type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'riding_data_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('导出成功');
+}
+function importData(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      var data = JSON.parse(ev.target.result);
+      if(!Array.isArray(data)) throw new Error('格式错误');
+      var map = {};
+      state.rides.forEach(function(r){ map[r.id] = r; });
+      data.forEach(function(r){ if(r.id && r.date && r.distance !== undefined) map[r.id] = r; });
+      state.rides = Object.values(map);
+      saveData();
+      render();
+      showToast('导入 ' + data.length + ' 条记录');
+    } catch(err){
+      showToast('导入失败: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ── Init ──
+loadData();
+render();
+</script>
+</body>
+</html>
