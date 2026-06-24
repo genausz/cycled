@@ -197,6 +197,23 @@ body{
 .stats-card .sc-num.muted{color:#8aaa8e}
 .stats-section{margin-bottom:16px}
 .stats-section .ss-title{font-size:12px;font-weight:600;color:#6a8a6e;margin-bottom:8px;letter-spacing:.5px}
+.cg-wrap{overflow-x:auto}
+.cg-months{display:flex;font-size:9px;color:#5a7a5e;margin-bottom:4px;padding-left:22px;gap:0}
+.cg-body{display:flex;gap:2px}
+.cg-weekdays{display:flex;flex-direction:column;gap:2px;margin-right:2px}
+.cg-weekdays span{width:14px;height:11px;font-size:9px;color:#5a7a5e;line-height:11px;text-align:center}
+.cg-grid{display:flex;gap:2px}
+.cg-col{display:flex;flex-direction:column;gap:2px}
+.cg-cell{width:11px;height:11px;border-radius:2px;flex-shrink:0}
+.cg-hidden{background:transparent}
+.cg-empty{background:rgba(45,138,94,.08)}
+.cg-l1{background:rgba(45,138,94,.2)}
+.cg-l2{background:rgba(45,138,94,.4)}
+.cg-l3{background:rgba(45,138,94,.65)}
+.cg-l4{background:rgba(45,138,94,.9)}
+.cg-legend{display:flex;align-items:center;gap:3px;margin-top:6px;justify-content:flex-end;font-size:9px;color:#5a7a5e}
+.cg-legend .cg-cell{width:10px;height:10px}
+
 .ride-bar-item{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px}
 .ride-bar-item .rbi-date{color:#5a7a5e;min-width:58px;flex-shrink:0}
 .ride-bar-item .rbi-bar-wrap{flex:1;height:6px;background:#1a2e20;border-radius:3px;overflow:hidden}
@@ -668,6 +685,55 @@ function renderCalendar(){
 }
 
 // ── STATS SCREEN ──
+
+function renderContributionGraph(){
+  var today=new Date();
+  var oneYearAgo=new Date(today.getFullYear()-1,today.getMonth(),today.getDate());
+  var lookup={}, maxDist=0;
+  state.rides.forEach(function(r){
+    var d=r.distance||0;
+    lookup[r.date]=(lookup[r.date]||0)+d;
+    if(lookup[r.date]>maxDist) maxDist=lookup[r.date];
+  });
+  maxDist=Math.max(maxDist,1);
+  var start=new Date(oneYearAgo);
+  start.setDate(start.getDate()-start.getDay());
+  var dates=[],d=new Date(start);
+  while(d<=today){dates.push(new Date(d));d.setDate(d.getDate()+1)}
+  var weeks=[],currentWeek=[],monthLabels=[],prevMonth=-1;
+  dates.forEach(function(date,i){
+    var ds=fmtDate(date),dist=lookup[ds]||0,isValid=date>=oneYearAgo&&date<=today,month=date.getMonth();
+    if(isValid&&date.getDate()<=7&&month!==prevMonth){
+      var n=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+      monthLabels.push({idx:weeks.length,l:n[month]});prevMonth=month;
+    }
+    currentWeek.push({dist:dist,v:isValid});
+    if(date.getDay()===6||i===dates.length-1){weeks.push(currentWeek);currentWeek=[]}
+  });
+  function cc(dist){
+    if(dist===0)return'cg-empty';
+    var r=dist/maxDist;
+    if(r<=0.25)return'cg-l1';if(r<=0.5)return'cg-l2';if(r<=0.75)return'cg-l3';return'cg-l4'
+  }
+  var h='<div class="stats-section"><div class="ss-title">骑行日历</div><div class="cg-wrap">';
+  h+='<div class="cg-months">';
+  monthLabels.forEach(function(ml){
+    h+='<span style="margin-left:'+(ml.idx*13)+'px">'+ml.l+'</span>'
+  });
+  h+='</div><div class="cg-body">';
+  h+='<div class="cg-weekdays"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span></span></div>';
+  h+='<div class="cg-grid">';
+  weeks.forEach(function(week){
+    h+='<div class="cg-col">';
+    week.forEach(function(cell){h+='<div class="cg-cell '+(cell.v?cc(cell.dist):'cg-hidden')+'"></div>'});
+    h+='</div>'
+  });
+  h+='</div></div>';
+  h+='<div class="cg-legend"><span>少</span><div class="cg-cell cg-empty"></div><div class="cg-cell cg-l1"></div><div class="cg-cell cg-l2"></div><div class="cg-cell cg-l3"></div><div class="cg-cell cg-l4"></div><span>多</span></div>';
+  h+='</div></div>';
+  return h;
+}
+
 function renderStats(){
   const all=state.rides;
   const tDist=totalKm(all),tCount=all.length,tDur=totalTime(all);
@@ -686,6 +752,7 @@ function renderStats(){
   const recentMax=Math.max(...recent.map(r=>r.distance||0),1);
 
   return `<div class="stats-screen">
+${renderContributionGraph()}
     <div class="stats-section"><div class="ss-title">总览</div>
       <div class="stats-grid">
         <div class="stats-card"><span class="sc-num">${fmtKm(tDist)}</span><span class="sc-label">总里程 km</span></div>
